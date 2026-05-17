@@ -1,6 +1,7 @@
 //Importando o express
 import express from "express";
 
+//Importando o cors
 import cors from "cors";
 
 // Criando variavel para receber o express
@@ -9,7 +10,7 @@ const app = express();
 // Criando variavel para receber qual vai ser a porta do servidor
 const PORTA_APP = 3333;
 
- //Criando um array de mensagens motivacionais
+//Criando um array de mensagens motivacionais
 const mensagens = [
   "Acredite no seu potencial — grandes conquistas começam com um único passo.",
   "O sucesso é a soma de pequenos esforços repetidos dia após dia.",
@@ -24,8 +25,7 @@ const mensagens = [
 ];
 
 app.use(cors());
-
-
+app.use(express.json());
 
 //Criando a rota para o servidor
 //Response = resposta que o servidor vai enviar para o cliente
@@ -45,22 +45,24 @@ app.get("/mensagem", (request, response) => {
   const numeroAleatorio = Math.random() * 10;
   //Aqui estou arredondando o numero aleatorio, e vai ser salvo.
   const numeroAredondado = Math.trunc(numeroAleatorio);
-//Aqui estou enviando a resposta para o usuario ja com a mensagem aleatoria
+  //Aqui estou enviando a resposta para o usuario ja com a mensagem aleatoria
   response.send({ mensagem: mensagens[numeroAredondado] });
 });
 
 //Criando uma rota de sorteador
-app.get("/sorteio"), (request, response) =>{
+app.get("/sorteio", (request, response) => {
   //Aqui estou pegando os nomes que o usuario vai enviar, e salvando em uma var
   //O split é para separar os nomes e deixar eles separados por uma virgula
   const nomesRecebidos = request.query.nomes.split(",");
-  
+
+  //Aqui estou pegando um numero aleatorio baseado no tamanho do array de nomes
   const nomeAleatorio = Math.random() * nomesRecebidos.length;
+  //Aqui estou arredondando o numero aleatorio para usar como indice do array
   const nomeSorteado = Math.trunc(nomeAleatorio);
 
-  response.send({nome: nomesRecebidos[nomeSorteado]})
-
-}
+  //Aqui estou enviando o nome sorteado para o usuario
+  response.send({ nome: nomesRecebidos[nomeSorteado] });
+});
 
 app.listen(PORTA_APP, () => console.log("Servidor rodando na porta 3333"));
 
