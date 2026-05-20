@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 
+
 // criar váriavel pra receber o express
 const app = express();
 const PORTA_APP = 8888;

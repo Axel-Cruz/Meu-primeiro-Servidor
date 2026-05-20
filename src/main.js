@@ -4,67 +4,87 @@ import express from "express";
 //Importando o cors
 import cors from "cors";
 
+//Importando o Low e o JSONFile do lowdb para salvar os dados em um arquivo JSON
+import { Low } from "lowdb";
+import { JSONFile } from "lowdb/node";
+
 // Criando variavel para receber o express
 const app = express();
 
 // Criando variavel para receber qual vai ser a porta do servidor
-const PORTA_APP = 3333;
+const PORTA_APP = 8888;
 
-//Criando um array de mensagens motivacionais
-const mensagens = [
-  "Acredite no seu potencial — grandes conquistas começam com um único passo.",
-  "O sucesso é a soma de pequenos esforços repetidos dia após dia.",
-  "Não espere pela oportunidade perfeita. Crie-a.",
-  "Cada dia é uma nova chance de ser melhor do que ontem.",
-  "A persistência transforma o impossível em possível.",
-  "Você é mais forte do que pensa e mais capaz do que imagina.",
-  "O único limite que existe é aquele que você mesmo cria.",
-  "Grandes resultados exigem grandes comprometimentos.",
-  "Errar faz parte do processo — desistir é a única derrota real.",
-  "Foque no progresso, não na perfeição.",
-];
-
+// Aqui estou dizendo para o servidor aceitar requisições de qualquer origem
 app.use(cors());
+
+// Aqui estou dizendo para o servidor aceitar dados no formato JSON
 app.use(express.json());
+
+// Aqui estou criando variaveis que nao estao sendo usadas pois o controle agora é pelo banco de dados
+let contadorProdutos = 1;
+const produtos = [];
+
+// Aqui estou criando a variavel que vai guardar qual arquivo vai ser o banco de dados
+const adapter = new JSONFile("db.json");
+
+// Aqui estou criando o banco de dados, dizendo que o arquivo vai ser o db.json
+// E caso o arquivo esteja vazio, ele vai começar com um array de produtos vazio e o contador de id começando em 1
+const db = new Low(adapter, { produtos: [], contadorProdutos: 1 });
+
+// Aqui estou lendo o arquivo db.json e carregando os dados que ja estao salvos
+await db.read();
+// fim da configuracao do lowDb
 
 //Criando a rota para o servidor
 //Response = resposta que o servidor vai enviar para o cliente
 //Request = requisição que o cliente vai enviar para o servidor
 //Send = enviar a resposta para o cliente
-app.get("/bem_vindo", (request, response) => {
-  response.send({ mensagem: "Bem vindo ao meu Servidor" });
+app.get("/produtos", (request, response) => {
+  // Aqui estou enviando todos os produtos que estao no array de produtos
+  response.send({ produtos: db.data.produtos });
 });
 
-app.get("/ola", (request, response) => {
-  response.send({ mensagem: "Olá você esta no meu mundo" });
+app.post("/produtos", (request, response) => {
+  //Aqui estou pegando os dados que o usuario vai enviar, e salvando em uma var
+  const meusDados = request.body;
+
+  // Aqui estou verificando se o nome foi enviado e se ele é uma string
+  if (!meusDados.nome || typeof meusDados.nome !== "string") {
+    response.status(400).send({ error: "Nome é obrigatório" });
+
+  // Aqui estou verificando se o preco foi enviado e se ele é um numero e se é maior que 0
+  } else if (typeof meusDados.preco !== "number" || meusDados.preco <= 0) {
+    response.status(400).send({ error: "Preço deve ser númerico e maior 0" });
+
+  // Aqui estou verificando se o estoque foi enviado e se ele é um numero e se é maior ou igual a 0
+  } else if (typeof meusDados.estoque !== "number" || meusDados.estoque < 0) {
+    response
+      .status(400)
+      .send({ error: "Estoque dever ser númerico e no mínimo 0" });
+
+  // Aqui estou verificando se o ativo foi enviado e se ele é um booleano (true ou false)
+  } else if (typeof meusDados.ativo !== "boolean") {
+    response.status(400).send({ error: "O status deve sert um booleano" });
+
+  } else {
+    //Aqui estou criando o novo produto com os dados recebidos
+    // O id vai ser o contadorProdutos do banco de dados, e ja incrementa +1 para o proximo produto
+    const novoProduto = { id: db.data.contadorProdutos++, ...meusDados };
+
+    // Aqui estou adicionando o novo produto no array de produtos do banco de dados
+    db.data.produtos.push(novoProduto);
+
+    // Aqui estou salvando os dados no arquivo db.json para nao perder quando o servidor reiniciar
+    await db.write();
+
+    // Aqui estou enviando a resposta para o usuario com o id e o nome do produto criado
+    response
+      .status(201)
+      .send({ data: { id: novoProduto.id, nome: novoProduto.nome } });
+  }
 });
 
-//Criando uma rota, que ao aberto vai retornar uma mensagem aleatoria
-app.get("/mensagem", (request, response) => {
-  //Aqui estou fazendo uma var para escolher uma mensagem aleatoria
-  const numeroAleatorio = Math.random() * 10;
-  //Aqui estou arredondando o numero aleatorio, e vai ser salvo.
-  const numeroAredondado = Math.trunc(numeroAleatorio);
-  //Aqui estou enviando a resposta para o usuario ja com a mensagem aleatoria
-  response.send({ mensagem: mensagens[numeroAredondado] });
-});
-
-//Criando uma rota de sorteador
-app.get("/sorteio", (request, response) => {
-  //Aqui estou pegando os nomes que o usuario vai enviar, e salvando em uma var
-  //O split é para separar os nomes e deixar eles separados por uma virgula
-  const nomesRecebidos = request.query.nomes.split(",");
-
-  //Aqui estou pegando um numero aleatorio baseado no tamanho do array de nomes
-  const nomeAleatorio = Math.random() * nomesRecebidos.length;
-  //Aqui estou arredondando o numero aleatorio para usar como indice do array
-  const nomeSorteado = Math.trunc(nomeAleatorio);
-
-  //Aqui estou enviando o nome sorteado para o usuario
-  response.send({ nome: nomesRecebidos[nomeSorteado] });
-});
-
-app.listen(PORTA_APP, () => console.log("Servidor rodando na porta 3333"));
+app.listen(PORTA_APP, () => console.log(" 🚀🚀🚀 Servidor rodando"));
 
 //GET POST DELETE PUT
 //AQUI SAO COMO SALAS/ENDEREÇOS
