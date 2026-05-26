@@ -1,12 +1,12 @@
 //Importando o express
-import express from "express";
+import express, { request } from "express";
 
 //Importando o cors
 import cors from "cors";
 
 //Importando o Low e o JSONFile do lowdb para salvar os dados em um arquivo JSON
-import { Low } from "lowdb";
 import { JSONFile } from "lowdb/node";
+import { Low } from "lowdb";
 
 // Criando variavel para receber o express
 const app = express();
@@ -14,77 +14,176 @@ const app = express();
 // Criando variavel para receber qual vai ser a porta do servidor
 const PORTA_APP = 8888;
 
-// Aqui estou dizendo para o servidor aceitar requisições de qualquer origem
+// Abre aplicação para receber requisicoes de outros lugares
 app.use(cors());
 
-// Aqui estou dizendo para o servidor aceitar dados no formato JSON
+// habilita reconhecimento de contéudo no formato JSON chegando servidor
 app.use(express.json());
 
-// Aqui estou criando variaveis que nao estao sendo usadas pois o controle agora é pelo banco de dados
-let contadorProdutos = 1;
-const produtos = [];
-
-// Aqui estou criando a variavel que vai guardar qual arquivo vai ser o banco de dados
+//Configuração de banco de dados no arquivo JSON
 const adapter = new JSONFile("db.json");
-
-// Aqui estou criando o banco de dados, dizendo que o arquivo vai ser o db.json
-// E caso o arquivo esteja vazio, ele vai começar com um array de produtos vazio e o contador de id começando em 1
-const db = new Low(adapter, { produtos: [], contadorProdutos: 1 });
-
-// Aqui estou lendo o arquivo db.json e carregando os dados que ja estao salvos
-await db.read();
-// fim da configuracao do lowDb
-
-//Criando a rota para o servidor
-//Response = resposta que o servidor vai enviar para o cliente
-//Request = requisição que o cliente vai enviar para o servidor
-//Send = enviar a resposta para o cliente
-app.get("/produtos", (request, response) => {
-  // Aqui estou enviando todos os produtos que estao no array de produtos
-  response.send({ produtos: db.data.produtos });
+const db = new Low(adapter, {
+  produtos: [],
+  contadorProdutos: 1,
+  clientes: [],
+  contadorClientes: 1,
 });
 
-app.post("/produtos", (request, response) => {
-  //Aqui estou pegando os dados que o usuario vai enviar, e salvando em uma var
+await db.read();
+// fim da configuracao
+
+app.post("/produtos", async (request, response) => {
   const meusDados = request.body;
 
-  // Aqui estou verificando se o nome foi enviado e se ele é uma string
   if (!meusDados.nome || typeof meusDados.nome !== "string") {
     response.status(400).send({ error: "Nome é obrigatório" });
-
-  // Aqui estou verificando se o preco foi enviado e se ele é um numero e se é maior que 0
   } else if (typeof meusDados.preco !== "number" || meusDados.preco <= 0) {
     response.status(400).send({ error: "Preço deve ser númerico e maior 0" });
-
-  // Aqui estou verificando se o estoque foi enviado e se ele é um numero e se é maior ou igual a 0
   } else if (typeof meusDados.estoque !== "number" || meusDados.estoque < 0) {
-    response
-      .status(400)
-      .send({ error: "Estoque dever ser númerico e no mínimo 0" });
-
-  // Aqui estou verificando se o ativo foi enviado e se ele é um booleano (true ou false)
+    response.status(400).send({ error: "Estoque dever ser númerico e no mínimo 0" });
   } else if (typeof meusDados.ativo !== "boolean") {
     response.status(400).send({ error: "O status deve sert um booleano" });
-
   } else {
-    //Aqui estou criando o novo produto com os dados recebidos
-    // O id vai ser o contadorProdutos do banco de dados, e ja incrementa +1 para o proximo produto
     const novoProduto = { id: db.data.contadorProdutos++, ...meusDados };
-
-    // Aqui estou adicionando o novo produto no array de produtos do banco de dados
     db.data.produtos.push(novoProduto);
-
-    // Aqui estou salvando os dados no arquivo db.json para nao perder quando o servidor reiniciar
     await db.write();
-
-    // Aqui estou enviando a resposta para o usuario com o id e o nome do produto criado
-    response
-      .status(201)
-      .send({ data: { id: novoProduto.id, nome: novoProduto.nome } });
+    response.status(201).send({ data: novoProduto });
   }
 });
 
-app.listen(PORTA_APP, () => console.log(" 🚀🚀🚀 Servidor rodando"));
+app.get("/produtos", (request, response) => {
+  const produtos_atuais = db.data.produtos;
+  response.send(produtos_atuais);
+});
+
+app.get("/produtos/:id", (request, response) => {
+  const idProduto = Number(request.params.id);
+  const produtos = db.data.produtos;
+
+  const produtoEncontrado = produtos.find(
+    (produto) => produto.id === idProduto,
+  );
+
+  if (!produtoEncontrado) {
+    response.status(404).send({ error: "Produto nao encontrado na base" });
+  } else {
+    response.send(produtoEncontrado);
+  }
+});
+
+/*
+  MANEIRA NAO OTIMIZADA
+  let produtoEncontrado = null;
+ 
+  produtos.forEach((produto) => {
+    if (produto.id === idProduto) {
+      produtoEncontrado = produto;
+    }
+  });
+  response.send(produtoEncontrado);
+*/
+
+// Aqui estou fazendo a rota para poder deletar
+app.delete("/clientes/:id", async (request, response) => {
+
+  // Aqui estou pegando o id enviado na URL
+  const idCliente = Number(request.params.id);
+
+  // Aqui estou verificando se existe um cliente com esse id
+  const clienteEncontrado = db.data.clientes.some(
+    (cliente) => cliente.id === idCliente
+  );
+
+  // Se não existir, retorna erro
+  if (!clienteEncontrado) {
+    return response.status(404).send({
+      error: "Cliente não encontrado na base"
+    });
+  }
+
+  // Aqui estou criando um novo array sem o cliente deletado
+  const clientesFiltrados = db.data.clientes.filter(
+    (cliente) => cliente.id !== idCliente
+  );
+
+  // Atualizando o array original
+  db.data.clientes = clientesFiltrados;
+
+  // Salvando no arquivo JSON
+  await db.write();
+
+  // Retornando mensagem de sucesso
+  response.send({
+    mensagem: "Deletado com sucesso!!"
+  });
+
+});
+
+//EXEMPLOS DE UPDATE = ATUALIZAÇÃO DE DADOS
+// Aqui estou fazendo a rota para poder atualizar
+app.put("/clientes/:id", async (request, response) => {
+
+  // Aqui estou pegando o id enviado na URL
+  const idCliente = Number(request.params.id);
+
+  //Aqui estou atualizando no body os dados que quero atualizar
+  const dadosAtualizados = request.body;
+
+
+  //VALIDAÇÃO PARA VER SE O CLIENTE EXISTE NA BASE
+  
+
+  // PRIMEIRA ETAPA Validação
+  const clienteEncontrado = db.data.clientes.some(
+    (cliente) => cliente.id === idCliente,
+  );
+
+  //se o cliente não existir, retorna erro.
+  if (!clienteEncontrado) {
+
+    response.status(404).send({
+      error: "Cliente não encontrado na base"
+    });
+
+  } // Fim da Validação
+
+  //SEGUNDA ETAPA DE MAPEAMENTO
+  else {
+
+    const clientesAlterados = db.data.clientes.map((cliente) => {
+
+      if (cliente.id === idCliente) {
+
+        if (dadosAtualizados.nome !== undefined) {
+          cliente.nome = dadosAtualizados.nome;
+        }
+        if (dadosAtualizados.salario !== undefined) {
+          cliente.salario = dadosAtualizados.salario;
+        }
+        if (dadosAtualizados.habilitacao !== undefined) {
+          cliente.habilitacao = dadosAtualizados.habilitacao;
+        }
+      }
+
+      return cliente;
+    });
+
+    console.log(clientesAlterados);
+
+    db.data.clientes = clientesAlterados;
+
+    await db.write();
+
+    response.send({
+      data: "Cliente atualizado com sucesso!!"
+    });
+  }
+
+});
+
+app.listen(PORTA_APP, () => {
+  console.log(" 🚀🚀🚀 Servidor rodando");
+});
 
 //GET POST DELETE PUT
 //AQUI SAO COMO SALAS/ENDEREÇOS
